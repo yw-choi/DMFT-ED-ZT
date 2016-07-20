@@ -1,0 +1,7 @@
+*.o
+*.mod
+*.x
+lib
+*.a
+test
+arch.make
