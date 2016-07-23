@@ -1,10 +1,8 @@
 module ed_basis
 
     use mpi
-    use dmft_params, only: norb
-    use ed_params, only: nbath, KIND_BASIS, nsite
+    use dmft_params, only: norb, nbath, nsite
     use numeric_utils, only: icom
-    use alloc, only: re_alloc, de_alloc
     
     implicit none
 
@@ -15,24 +13,27 @@ module ed_basis
         get_bitidx,     &
         dealloc_basis
 
-    type, public :: basis_t
-        integer(kind=KIND_BASIS) :: nloc
+    integer, parameter, public :: &
+        KIND_BASIS = 4 ! integer kind for basis representation
 
-        integer(kind=KIND_BASIS) :: ntot
-        integer(kind=KIND_BASIS) :: nup
-        integer(kind=KIND_BASIS) :: ndown
+    type, public :: basis_t
+        integer :: nloc
+
+        integer :: ntot
+        integer :: nup
+        integer :: ndown
 
         integer :: ne_up
         integer :: ne_down
 
-        integer(kind=KIND_BASIS), pointer :: up(:)
-        integer(kind=KIND_BASIS), pointer :: down(:)
+        integer, allocatable :: up(:)
+        integer, allocatable :: down(:)
 
-        integer(kind=KIND_BASIS), pointer :: idx_up(:)
-        integer(kind=KIND_BASIS), pointer :: idx_down(:)
+        integer, allocatable :: idx_up(:)
+        integer, allocatable :: idx_down(:)
 
-        integer(kind=KIND_BASIS), allocatable :: nlocals(:)
-        integer(kind=KIND_BASIS), allocatable :: offsets(:)
+        integer, allocatable :: nlocals(:)
+        integer, allocatable :: offsets(:)
     end type basis_t
 
     private
@@ -43,9 +44,9 @@ contains
         type(basis_t), intent(out) :: basis
 
         ! local variables
-        integer(kind=KIND_BASIS) :: ispin, i, j, nam
-        integer(kind=KIND_BASIS) :: minrange, maxrange, counts, nbit
-        integer(kind=KIND_BASIS) :: nud(2)
+        integer :: ispin, i, j, nam
+        integer :: minrange, maxrange, counts, nbit
+        integer :: nud(2)
 
         basis%ne_up = ne_up
         basis%ne_down = ne_down
@@ -66,10 +67,8 @@ contains
             basis%offsets(i) = basis%offsets(i-1) + basis%nlocals(i-1)
         enddo
 
-        nullify(basis%up,basis%down,basis%idx_down,basis%idx_up)
-
-        call re_alloc(basis%up, 1, basis%nup, 'ed_basis', 'basis_up')
-        call re_alloc(basis%down, 1, basis%ndown, 'ed_basis', 'basis_down')
+        allocate(basis%up(basis%nup))
+        allocate(basis%down(basis%ndown))
 
         nud(1) = ne_up
         nud(2) = ne_down
@@ -85,11 +84,9 @@ contains
             enddo
             
             if (ispin.eq.1) then
-                call re_alloc(basis%idx_up, minrange, maxrange, &
-                    'ed_basis', 'basis_idx_up')
+                allocate(basis%idx_up(minrange:maxrange))
             else
-                call re_alloc(basis%idx_down, minrange, maxrange, &
-                    'ed_basis', 'basis_idx_down')
+                allocate(basis%idx_down(minrange:maxrange))
             endif
             
             counts = 0
@@ -118,19 +115,16 @@ contains
 
     subroutine dealloc_basis(basis)
         type(basis_t), intent(inout) :: basis
-        call de_alloc(basis%up, 'ed_basis', 'basis_up')
-        call de_alloc(basis%down, 'ed_basis', 'basis_down')
-        call de_alloc(basis%idx_up, 'ed_basis', 'basis_idx_up')
-        call de_alloc(basis%idx_down, 'ed_basis', 'basis_idx_down')
+        deallocate(basis%up,basis%down,basis%idx_up,basis%idx_down)
     end subroutine dealloc_basis
 
     ! ref : arXiv:1307.7542 eq (6)
-    integer(kind=kind_basis) function ed_basis_get(basis,idx_loc) 
+    integer function ed_basis_get(basis,idx_loc) 
         type(basis_t), intent(in) :: basis
-        integer(kind=KIND_BASIS), intent(in) :: idx_loc
+        integer, intent(in) :: idx_loc
 
         ! local variables
-        integer(kind=KIND_BASIS) :: iup, idown, idx
+        integer :: iup, idown, idx
 
         ! local idx to global idx
         idx = idx_loc + basis%offsets(taskid)
@@ -142,12 +136,12 @@ contains
     end function ed_basis_get
 
     ! ref : arXiv:1307.7542 eq (8)
-    integer(kind=KIND_BASIS) function ed_basis_idx(basis, basis_i)
+    integer function ed_basis_idx(basis, basis_i)
         type(basis_t), intent(in) :: basis
-        integer(kind=kind_basis) :: basis_i
+        integer :: basis_i
 
         ! local variables
-        integer(kind=KIND_BASIS) :: basis_i_up, basis_i_down
+        integer :: basis_i_up, basis_i_down
         
         basis_i_up = mod(basis_i,2**(nsite))
         basis_i_down = basis_i/(2**(nsite))
@@ -156,8 +150,8 @@ contains
                              basis%idx_up(basis_i_up)
     end function ed_basis_idx
 
-    integer(kind=KIND_BASIS) function get_bitidx(isite,ispin)
-        integer(kind=KIND_BASIS) :: isite, ispin
+    integer function get_bitidx(isite,ispin)
+        integer :: isite, ispin
         get_bitidx = (ispin-1)*Nsite + isite-1
     end function get_bitidx
 end module ed_basis

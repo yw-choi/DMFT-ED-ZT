@@ -2,16 +2,14 @@ module dmft_grid
 
     use mpi
     use constants
-    use dmft_params
+    use dmft_params, only: nw, beta
 
     public :: dmft_grid_init
 
-    integer, public :: &
-        nwloc           ! number of matsubara frequencies local to the node
-    
+    integer, public :: nwloc
     integer, allocatable, public :: &
-        nw_procs(:),  & ! nw_procs(nprocs) number of matsubara frequencies for each processor
-        nw_offsets(:)   ! nw_offsets(nprocs) global frequency index offsets 
+        nw_procs(:),  & ! nw_procs(nprocs) nwloc for each processors
+        nw_offsets(:)   ! nw_offsets(nprocs) frequency index offsets
 
     double precision, allocatable, public :: &
         omega(:)        ! omega(nwloc)  matsubara frequencies local to the node

@@ -12,16 +12,18 @@ module dmft_lattice
         dmft_lattice_init
 
     double complex, allocatable, public :: &
-        Hk(:,:,:,:)  ! Hk(nk,norb,norb,nspin) tight-binding hamiltonian
+        Hk(:,:,:,:)    ! Hk(nk,norb,norb,nspin) tight-binding hamiltonian
 
     double precision, allocatable, public :: &
         dos(:,:,:),  & ! dos(ne,norb,nspin) tight-binding dos
         egrid(:),    & ! egrid(ne) dos integration energy grid
         occ0(:,:)      ! occ0(norb,nspin) tight-binding occupancy
 
-    integer, parameter, public :: ne = 2000 ! dos integration points
+    integer, parameter, public :: ne = 2000
     double precision, parameter, public :: &
-        emax = 1.d0, emin = -1.d0
+        emin = -1.d0, &
+        emax =  1.d0
+
     private
 contains
 
@@ -138,4 +140,5 @@ contains
 
         call mpi_barrier(comm, mpierr)
     end subroutine dump_dos
+
 end module dmft_lattice

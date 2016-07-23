@@ -3,8 +3,11 @@
 include ../arch.make
 
 EXEC = dmft-ed-zt.x
-OBJS = mpi.o timer.o constants.o numeric_utils.o alloc.o\
-	   io_units.o dmft_params.o main.o dmft_grid.o dmft_lattice.o
+OBJS = mpi.o timer.o constants.o numeric_utils.o \
+	   io_units.o dmft_params.o main.o dmft_grid.o dmft_lattice.o \
+	   dmft.o ed_basis.o dmft_green.o ground_state.o \
+	   impurity_hamiltonian.o lanczos_solver.o arpack_solver.o \
+	   eigpair.o
 
 default: all
 ##################
@@ -18,10 +21,15 @@ FFLAGS+=-I./fdf
 ### Dependencies ###
 ####################
 $(OBJS): $(FDF)
-main.o: mpi.o timer.o io_units.o alloc.o constants.o\
-		numeric_utils.o dmft_grid.o dmft_lattice.o
-
-dmft_lattic.o: dmft_grid.o
+main.o: mpi.o timer.o io_units.o constants.o \
+		numeric_utils.o dmft.o
+dmft.o: dmft_lattice.o dmft_grid.o dmft_green.o eigpair.o ground_state.o \
+		impurity_hamiltonian.o 
+ground_state.o: lanczos_solver.o arpack_solver.o
+arpack_solver.o: impurity_hamiltonian.o
+lanczos_solver.o: impurity_hamiltonian.o
+impurity_hamiltonian.o: ed_basis.o
+dmft_lattice.o: dmft_grid.o
 
 $(FDF): 
 	cd fdf ; $(MAKE);
