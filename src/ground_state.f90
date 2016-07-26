@@ -1,4 +1,4 @@
-subroutine ground_state(em, ek, vmk, basis, gs)
+subroutine ground_state(em, ek, vmk, gs)
     
     use mpi
     use utils, only: die
@@ -10,17 +10,18 @@ subroutine ground_state(em, ek, vmk, basis, gs)
     use lanczos_solver, only: diag_lanczos
     use arpack_solver, only: diag_arpack
 
+    use debug, only: dump_hamiltonian
+
     double precision, intent(in) :: &
         em(norb,2), &
         ek(norb,2), &
         vmk(norb,nbath,2)
 
-    type(basis_t), intent(out) :: basis
     type(eigpair_t), intent(out) :: gs
 
     integer :: isector, ne_up, ne_down, nh, gs_sector 
 
-    type(basis_t) :: basis_tmp
+    type(basis_t) :: basis
     double precision :: eigval_tmp
     double precision, allocatable :: eigvec_tmp(:)
 
@@ -37,9 +38,13 @@ subroutine ground_state(em, ek, vmk, basis, gs)
                                 ne_up,", ",ne_down,", ",nh,")" 
         endif
         
-        call generate_basis(ne_up, ne_down, basis_tmp)
+        call generate_basis(ne_up, ne_down, basis)
+        
+        ! DEBUG
+        ! call dump_hamiltonian( em, ek, vmk, basis )
+        ! stop
 
-        allocate(eigvec_tmp(basis_tmp%nloc))
+        allocate(eigvec_tmp(basis%nloc))
         
         ! find the ground state in the given sector
         t1_diag_loop = mpi_wtime(mpierr)    
@@ -47,15 +52,15 @@ subroutine ground_state(em, ek, vmk, basis, gs)
         call mpi_barrier(comm, mpierr)
         select case(diag_solver)
             case (1)
-                call diag_lanczos(em, ek, vmk, basis_tmp, eigval_tmp, eigvec_tmp)
+                call diag_lanczos(em, ek, vmk, basis, eigval_tmp, eigvec_tmp)
             case (2)
-                call diag_arpack(em, ek, vmk, basis_tmp, eigval_tmp, eigvec_tmp)
+                call diag_arpack(em, ek, vmk, basis, eigval_tmp, eigvec_tmp)
             case default
                 call die("ground_state", "invalid diag solver.")
         end select
 
         if (eigval_tmp < gs%val) then
-            basis = basis_tmp
+            gs%isector = isector
             gs%val = eigval_tmp
             if (allocated(gs%vec)) deallocate(gs%vec)
             allocate(gs%vec(basis%nloc))
@@ -63,6 +68,7 @@ subroutine ground_state(em, ek, vmk, basis, gs)
         endif
 
         deallocate(eigvec_tmp)
+        call dealloc_basis(basis)
         t2_diag_loop = mpi_wtime(mpierr)
     enddo
 

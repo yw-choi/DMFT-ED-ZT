@@ -16,11 +16,41 @@ contains
             ek(nbath,2), &
             vmk(norb,nbath,2)
 
+        integer :: ispin, iorb, ibath
+
         ! @TODO read h_imp params from the save file
 
         em = em_input
         ek = ek_input
         vmk = vmk_input
+
+        if (master) then
+            write(*,*) "Initial mpurity Hamiltonian parameters"
+            do ispin=1,nspin
+                write(*,*) "spin ", ispin
+
+                write(*,*) "impurity levels"
+                do iorb=1,norb
+                    write(*,"(F6.3)") em(iorb,ispin)
+                enddo
+
+                write(*,*) "bath levels"
+                do ibath=1,nbath
+                    write(*,"(F6.3)") ek(ibath,ispin)
+                enddo
+
+                write(*,*) "hybridization"
+                do ibath=1,nbath
+                    do iorb=1,norb
+                        write(*,"(F6.3)",advance="no") vmk(iorb,ibath,ispin)
+                    enddo
+                    write(*,*)
+                enddo
+                write(*,*)
+            enddo
+        endif
+
+        call mpi_barrier(comm, mpierr)
 
     end subroutine initial_h_imp_params
 
@@ -66,7 +96,8 @@ contains
                 ! 1. onsite energies up/dn, 
                 ! 2. intra orbital density-density
                 ! ==================================
-                rowsum = rowsum + ((em(iorb,1)-mu)*ni(1) + (em(iorb,2)-mu)*ni(2) &
+                rowsum = rowsum + ((em(iorb,1)-mu)*ni(1) &
+                            + (em(iorb,2)-mu)*ni(2) &
                             + U*ni(1)*ni(2))*x(b)
 
                 ! ==================================
@@ -94,7 +125,7 @@ contains
                 ! ==================================
                 do ispin=1,2
                     do jbath=1,nbath
-                        if (vmk(iorb,jbath,ispin)<1.d-16) then
+                        if (abs(vmk(iorb,jbath,ispin))<1.d-16) then
                             cycle
                         endif
 
@@ -126,7 +157,7 @@ contains
                 ! 5. spin-flip & pair-hopping
                 ! ==================================
                 do jorb=1,norb
-                    if (iorb==jorb) continue
+                    if (iorb==jorb) cycle
 
                     ! n_j,up
                     if (BTEST(bra,jorb-1)) then

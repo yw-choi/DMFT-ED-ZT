@@ -2,29 +2,26 @@ subroutine dmft
 
     use mpi
     use timer, only: t1_loop, t2_loop, timestamp
-    use dmft_grid, only: dmft_grid_init, nwloc
-    use ed_basis, only: basis_t
-    use impurity_hamiltonian, only: initial_h_imp_params
+    use dmft_grid, only: dmft_grid_init, nwloc, omega
     use eigpair, only: eigpair_t
+    use impurity_hamiltonian, only: initial_h_imp_params
     use dmft_lattice, only: dmft_lattice_init
-    use dmft_green, only: calc_Delta
-    use dmft_params, only:dmft_params_read, &
-                           nspin, norb, nbath, nsite, nloop, nsector, &
-                           maxnstep, nw, tbham, em_present, ek_present, &
-                           vmk_present, read_gf_from_file, &
-                           U, Up, Jex, Jp, Mu, scf_tol, &
-                           sectors
+    use dmft_green, only: cluster_hybridization_ftn, &
+                          cluster_green_ftn, &
+                          local_green_ftn
+    use ed_projection, only: fit_h_imp_params 
+    use dmft_params, only: dmft_params_read, &
+                           nspin, norb, nbath, nloop
 
     implicit none
 
     ! data variables
     double complex, allocatable :: &
-        G_old(:,:,:),     & ! G_prev(nwloc,norb,nspin) prev local Green's ftn
-        G(:,:,:),         & ! G(nwloc,norb,nspin) current local Green's ftn
-        Delta_old(:,:,:), & ! Delta_old(nwloc,norb,nspin) hybridization function
-        Delta(:,:,:),     & ! Delta(nwloc,norb,nspin) hybridization function
+        G_cl(:,:,:),     & ! Gimp(nwloc,norb,nspin) 
+        G_loc(:,:,:),     & ! Gloc(nwloc,norb,nspin)
+        D_cl(:,:,:),       & ! D_cl(nwloc,norb,nspin)
         G0(:,:,:),        & ! G0(nwloc,norb,nspin) Weiss field
-        Sigma(:,:,:)       ! Sigma(nwloc,norb,nspin) self energy
+        Sigma(:,:,:)        ! Sigma(nwloc,norb,nspin) self energy
 
     double precision, allocatable :: &
         occ(:,:),        & ! occ(norb,nspin) occupancy from the local Green's ftn
@@ -32,19 +29,17 @@ subroutine dmft
         ek(:,:),         & ! ek(nbath,2) bath levels
         vmk(:,:,:)         ! vmk(norb,nbath,2) impurity-bath hybridization 
 
-    ! ground state's basis, E0, gs 
-    type(basis_t) :: basis
-    
+    ! ground state
     type(eigpair_t) :: gs
 
     ! local variables
-    logical :: &
-        converged
-
-    integer :: &
-        iloop
-
+    logical :: converged
+    integer :: iloop
+    double precision :: diff
     character(len=200) :: msg
+    
+    ! @TODO remove the following debugging variables
+    integer :: iw
     
     ! Read run parameters from input fdf file
     call dmft_params_read
@@ -55,16 +50,16 @@ subroutine dmft
     ! tight-binding hamiltonian
     call dmft_lattice_init
 
-    allocate(G_old(nwloc,norb,nspin), G(nwloc,norb,nspin))
+    allocate(G_cl(nwloc,norb,nspin), G_loc(nwloc,norb,nspin))
+    allocate(D_cl(nwloc,norb,nspin))
     allocate(G0(nwloc,norb,nspin), Sigma(nwloc,norb,nspin))
-    allocate(Delta_old(nwloc,norb,nspin),Delta(nwloc,norb,nspin))
     allocate(occ(norb,nspin))
     allocate(em(norb,2), ek(nbath,2), vmk(norb,nbath,2))
 
     ! initial impurity hamiltonian parameters
-    call initial_h_imp_params(em, ek, vmk)
+    call initial_h_imp_params( em, ek, vmk )
 
-    call calc_Delta(ek, vmk, Delta)
+    call cluster_hybridization_ftn( ek, vmk, D_cl )
 
     ! Main DMFT loop
     converged = .false.
@@ -81,30 +76,58 @@ subroutine dmft
 
         t1_loop = mpi_wtime(mpierr)
 
-        call ground_state(em, ek, vmk, basis, gs)
+        call ground_state( em, ek, vmk, gs )
 
-        ! @TODO
-        ! call cluster_green_ftn(em,ek,vmk, nev, eigpairs, G)
+        call cluster_green_ftn( em, ek, vmk, gs, G_cl )
 
-        ! @TODO test convergence with Green's function or Delta?
-        ! call test_convergence(G_old, G, converged)
+        open(unit=123,file="green.dump",status="replace")
+        do iw=1,nwloc
+            write(123,*) omega(iw), real(G_cl(iw,1,1)), aimag(G_cl(iw,1,1))
+        enddo
+        close(123)
+        stop
 
-        if (converged) then
-            if (master) then
+        ! @TODO 
+        call local_green_ftn( em, D_cl, G_cl, G_loc )
+
+        call test_convergence( G_cl, G_loc, diff, converged )
+
+        if (master) then
+            write(*,*) "|G_cl - G_loc| = ", diff
+            if (converged) then
                 write(*,*) "DMFT loop has converged within ",iloop," iterations."
+                exit dmftloop
             endif
-            exit dmftloop
         endif
 
-        ! Delta_old = Delta
-        ! calculate a new Delta from em, Delta_old, G
-        ! call new_delta(em, Delta_old, G, Delta)
-
-        ! @TODO
         ! find new em, ek, vmk by fitting Delta_cl to Delta
-        ! call fit_delta_cl(Delta, em, ek, vmk)
+        ! @TODO 
+        call fit_h_imp_params( em, ek, vmk, D_cl, G_cl, G_loc )
+
+        ! @TODO 
+        call cluster_hybridization_ftn( ek, vmk, D_cl )
 
         t2_loop = mpi_wtime(mpierr)
     enddo dmftloop
 
 end subroutine dmft
+
+subroutine test_convergence( G_cl, G_loc, diff, converged )
+    use dmft_params, only: nspin, norb, nbath, nw, scf_tol
+    use dmft_grid, only: nwloc
+
+    double complex, intent(in) :: &
+        G_cl(nwloc, norb, nspin), &
+        G_loc(nwloc, norb, nspin)
+
+    logical, intent(out) :: converged
+                                 
+    double precision :: diff_loc, diff
+
+    diff_loc = sum(abs(G_cl-G_loc)) / (norb*nbath)
+    call mpi_allreduce( diff_loc, diff, 1, mpi_double_precision, &
+                        mpi_sum, comm, mpierr )
+
+    converged = diff < scf_tol
+
+end subroutine test_convergence

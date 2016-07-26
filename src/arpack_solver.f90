@@ -26,7 +26,7 @@ contains
         double precision, intent(out) :: eigval
         double precision, intent(out) :: eigvec(basis%nloc)
 
-        integer, parameter :: nev = 5
+        integer, parameter :: nev = 3
         character, parameter :: bmat = 'I'
         character(len=2), parameter :: which = 'SA'
         double precision, allocatable :: ax(:), workd(:), resid(:), &

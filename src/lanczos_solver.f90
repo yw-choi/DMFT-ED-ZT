@@ -8,7 +8,9 @@ module lanczos_solver
 
     implicit none
 
-    public :: diag_lanczos
+    public :: &
+        diag_lanczos, &
+        lanczos_iteration
 
     private
 contains
