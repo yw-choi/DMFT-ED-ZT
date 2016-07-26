@@ -162,16 +162,16 @@ contains
             enddo
 
             if (nspin==2) then
-                if (fdf_bline(bfdf, pline)) then
-                    do i=1,nbath
+                do i=1,nbath
+                    if (fdf_bline(bfdf, pline)) then
                         do j=1,norb
                             vmk_input(j,i,2) = fdf_breals(pline, j)
                         enddo
-                    enddo
-                else
-                    call die("dmft_params", &
-                        "not enough initial hybridization parameters given")
-                endif
+                    else
+                        call die("dmft_params", &
+                            "not enough initial hybridization parameters given")
+                    endif
+                enddo
             endif
         endif
 

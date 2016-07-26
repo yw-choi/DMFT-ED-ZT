@@ -19,7 +19,7 @@ subroutine ground_state(em, ek, vmk, gs)
 
     type(eigpair_t), intent(out) :: gs
 
-    integer :: isector, ne_up, ne_down, nh, gs_sector 
+    integer :: isector, ne_up, ne_down, nh, gs_sector ,i  
 
     type(basis_t) :: basis
     double precision :: eigval_tmp

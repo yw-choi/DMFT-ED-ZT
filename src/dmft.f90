@@ -80,15 +80,13 @@ subroutine dmft
 
         call cluster_green_ftn( em, ek, vmk, gs, G_cl )
 
+        call local_green_ftn( em, D_cl, G_cl, G_loc )
         open(unit=123,file="green.dump",status="replace")
         do iw=1,nwloc
-            write(123,*) omega(iw), real(G_cl(iw,1,1)), aimag(G_cl(iw,1,1))
+            write(123,"(5F12.6)") omega(iw), real(G_cl(iw,1,1)), aimag(G_cl(iw,1,1)),&
+                        real(G_loc(iw,1,1)), aimag(G_loc(iw,1,1))
         enddo
         close(123)
-        stop
-
-        ! @TODO 
-        call local_green_ftn( em, D_cl, G_cl, G_loc )
 
         call test_convergence( G_cl, G_loc, diff, converged )
 
@@ -100,11 +98,9 @@ subroutine dmft
             endif
         endif
 
-        ! find new em, ek, vmk by fitting Delta_cl to Delta
-        ! @TODO 
+        ! find new em, ek, vmk 
         call fit_h_imp_params( em, ek, vmk, D_cl, G_cl, G_loc )
 
-        ! @TODO 
         call cluster_hybridization_ftn( ek, vmk, D_cl )
 
         t2_loop = mpi_wtime(mpierr)
@@ -113,6 +109,7 @@ subroutine dmft
 end subroutine dmft
 
 subroutine test_convergence( G_cl, G_loc, diff, converged )
+    use mpi
     use dmft_params, only: nspin, norb, nbath, nw, scf_tol
     use dmft_grid, only: nwloc
 

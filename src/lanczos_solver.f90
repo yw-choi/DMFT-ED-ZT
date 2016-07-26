@@ -288,6 +288,8 @@ contains
             k = k+1
         enddo
 
+        eigvec = eigvec / mpi_norm( eigvec, nloc )
+
         ! test eigenvector residual | H|gs>-E0|gs> |^2
         call hx( em, ek, vmk, basis, eigvec, v, x_all, .false. )
         call daxpy( nloc, -eigval, eigvec, 1, v, 1)

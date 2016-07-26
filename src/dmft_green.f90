@@ -5,6 +5,7 @@ module dmft_green
     use dmft_grid, only: nwloc, omega
     use ed_basis, only: basis_t, dealloc_basis, generate_basis
     use eigpair, only: eigpair_t
+    use constants
 
     implicit none
 
@@ -45,9 +46,9 @@ contains
 
     subroutine cluster_green_ftn( em, ek, vmk, gs, G_cl )
         double precision, intent(in) :: &
-            em(norb,nspin), &
-            ek(nbath,nspin), &
-            vmk(norb,nbath,nspin)
+            em(norb,2), &
+            ek(nbath,2), &
+            vmk(norb,nbath,2)
         type(eigpair_t), intent(in) :: gs
         
         double complex, intent(out) :: G_cl(nwloc,norb,nspin)
@@ -107,7 +108,34 @@ contains
 
         double complex, intent(out) :: G_loc(nwloc,norb,nspin)
 
-        G_loc = 0.d0
+        integer :: iw, iorb, ispin, ix, ne
+
+        double precision :: val,x
+
+        ne = 10000
+
+        ! @TODO implemented only for the Bethe-lattice
+        ! G_loc = 4.d0*D_cl
+        do ispin=1,nspin
+            do iorb=1,norb
+                do iw=1,nwloc
+                    G_loc(iw,iorb,ispin) = 0.d0
+
+                    do ix=1,ne
+                        x = -1.d0+(ix-1)*2.d0/(ne-1)
+                        val = 1.d0-x*x
+                        G_loc(iw,iorb,ispin) = G_loc(iw,iorb,ispin) + &
+                            2.d0/pi*sqrt(max(val,0.d0))/&
+                            (em(iorb,ispin) &
+                            + D_cl(iw,iorb,ispin) &
+                            + 1.0d0/G_cl(iw,iorb,ispin) &
+                            - x)
+                    enddo
+                    G_loc(iw,iorb,ispin) = G_loc(iw,iorb,ispin)/(ne-1)*2.d0
+                enddo
+            enddo
+        enddo
+        
     end subroutine local_green_ftn
 
 
@@ -126,7 +154,7 @@ contains
         type(basis_t), intent(in) :: basis
         type(eigpair_t), intent(in) :: gs
         double precision, intent(in) :: em(norb,2), ek(nbath,2), vmk(norb,nbath,2)
-        double complex, intent(out) :: g_diag(nwloc)
+        double complex, intent(out) :: g_diag(nwloc,2)
 
         type(basis_t) :: basis_out
         integer :: nstep, nlocup, iw
@@ -135,7 +163,7 @@ contains
 
         allocate(a(maxnstep),b(maxnstep))
 
-        g_diag = 0.d0
+        g_diag(:,ispin) = 0.d0
 
         ! G^+
         ! 1. c^+|iev>
@@ -160,7 +188,7 @@ contains
         do iw=1,nwloc
             z = cmplx(gs%val, omega(iw))
             gr = continued_fraction_p(z, nstep, a, b)
-            g_diag(iw) = g_diag(iw)+gr
+            g_diag(iw,ispin) = g_diag(iw,ispin)+gr
         enddo
 
         call dealloc_basis(basis_out)
@@ -191,7 +219,7 @@ contains
             z = cmplx(-gs%val, omega(iw))
             gr = continued_fraction_m(z, nstep, a, b)
             
-            g_diag(iw) = g_diag(iw)+gr
+            g_diag(iw,ispin) = g_diag(iw,ispin)+gr
         enddo
 
         call dealloc_basis(basis_out)
