@@ -27,7 +27,7 @@ subroutine dump_data( em, ek, vmk, D_cl, G_cl, G_loc )
 
     ! dump em, ek, vmk
     if (master) then
-        write(*,*) "Saving DMFT data ..."
+        write(*,*) "Writing DMFT data ..."
         open(unit=IO_H_PARAMS, file=FN_H_PARAMS, status="replace")
         write(IO_H_PARAMS,*) norb, nbath, nspin
         do ispin=1,nspin
@@ -50,11 +50,12 @@ subroutine dump_data( em, ek, vmk, D_cl, G_cl, G_loc )
 
     ! dump D_cl, G_cl, G_loc
     allocate(omega_all(nw), D_cl_all(nw), G_cl_all(nw), G_loc_all(nw))
+    call mpi_gatherv(omega, nwloc, mpi_double_precision, &
+        omega_all, nw_procs, nw_offsets, mpi_double_precision, &
+        0, comm, mpierr)
+
     do ispin=1,nspin
         do iorb=1,norb
-            call mpi_gatherv(omega, nwloc, mpi_double_precision, &
-                omega_all, nw_procs, nw_offsets, mpi_double_precision, &
-                0, comm, mpierr)
             call mpi_gatherv(D_cl(:,iorb,ispin), nwloc, mpi_double_complex, &
                 D_cl_all, nw_procs, nw_offsets, mpi_double_complex, &
                 0, comm, mpierr)
@@ -86,6 +87,6 @@ subroutine dump_data( em, ek, vmk, D_cl, G_cl, G_loc )
 
     deallocate(omega_all, G_cl_all, D_cl_all, G_loc_all)
 
-
     call mpi_barrier(comm, mpierr)
 end subroutine dump_data
+

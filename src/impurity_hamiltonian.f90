@@ -16,7 +16,7 @@ contains
             ek(nbath,2), &
             vmk(norb,nbath,2)
 
-        integer :: ispin, iorb, ibath
+        integer :: ispin, iorb, ibath, i, j
 
         ! @TODO read h_imp params from the save file
 
@@ -25,29 +25,34 @@ contains
         vmk = vmk_input
 
         if (master) then
-            write(*,*) "Initial mpurity Hamiltonian parameters"
+            write(*,*) 
+            write(*,*) "Initial impurity Hamiltonian parameters"
             do ispin=1,nspin
-                write(*,*) "spin ", ispin
-
-                write(*,*) "impurity levels"
-                do iorb=1,norb
-                    write(*,"(F6.3)") em(iorb,ispin)
+                write(*,*) 
+                write(*,*) "Spin ",ispin
+                write(*,*) "Impurity/Bath Levels"
+                do i=1,norb
+                    write(*,"(1x,A,I2,F12.6)") "orb  ",i,em(i,ispin)
                 enddo
-
-                write(*,*) "bath levels"
-                do ibath=1,nbath
-                    write(*,"(F6.3)") ek(ibath,ispin)
+                do i=1,nbath
+                    write(*,"(1x,A,I2,F12.6)") "bath ",i,ek(i,ispin)
                 enddo
-
-                write(*,*) "hybridization"
-                do ibath=1,nbath
-                    do iorb=1,norb
-                        write(*,"(F6.3)",advance="no") vmk(iorb,ibath,ispin)
+                write(*,*)
+                write(*,*) "Impurity/Bath Hybridization"
+                write(*,"(7x)", advance="no")
+                do i=1,norb
+                    write(*,"(4x,A3,I1,4x)",advance="no") "orb",i
+                enddo
+                write(*,*)
+                do i=1,nbath
+                    write(*,"(1x,a4,I2)",advance="no") "bath",i
+                    do j=1,norb
+                        write(*,"(F12.6)",advance="no") vmk(j,i,ispin)
                     enddo
                     write(*,*)
                 enddo
-                write(*,*)
             enddo
+            write(*,*)
         endif
 
         call mpi_barrier(comm, mpierr)

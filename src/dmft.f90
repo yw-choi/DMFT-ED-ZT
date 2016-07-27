@@ -17,14 +17,11 @@ subroutine dmft
 
     ! data variables
     double complex, allocatable :: &
-        G_cl(:,:,:),     & ! Gimp(nwloc,norb,nspin) 
-        G_loc(:,:,:),     & ! Gloc(nwloc,norb,nspin)
-        D_cl(:,:,:),       & ! D_cl(nwloc,norb,nspin)
-        G0(:,:,:),        & ! G0(nwloc,norb,nspin) Weiss field
-        Sigma(:,:,:)        ! Sigma(nwloc,norb,nspin) self energy
+        G_cl(:,:,:),      & ! G_cl(nwloc,norb,nspin) 
+        G_loc(:,:,:),     & ! G_loc(nwloc,norb,nspin)
+        D_cl(:,:,:)         ! D_cl(nwloc,norb,nspin)
 
     double precision, allocatable :: &
-        occ(:,:),        & ! occ(norb,nspin) occupancy from the local Green's ftn
         em(:,:),         & ! em(norb,2) impurity levels
         ek(:,:),         & ! ek(nbath,2) bath levels
         vmk(:,:,:)         ! vmk(norb,nbath,2) impurity-bath hybridization 
@@ -49,8 +46,6 @@ subroutine dmft
 
     allocate(G_cl(nwloc,norb,nspin), G_loc(nwloc,norb,nspin))
     allocate(D_cl(nwloc,norb,nspin))
-    allocate(G0(nwloc,norb,nspin), Sigma(nwloc,norb,nspin))
-    allocate(occ(norb,nspin))
     allocate(em(norb,2), ek(nbath,2), vmk(norb,nbath,2))
 
     ! initial impurity hamiltonian parameters
@@ -101,6 +96,8 @@ subroutine dmft
 
         t2_loop = mpi_wtime(mpierr)
     enddo dmftloop
+
+    call post_process( em, ek, vmk, D_cl, G_cl, G_loc )
 
 end subroutine dmft
 

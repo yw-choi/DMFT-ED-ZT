@@ -7,52 +7,46 @@ def main():
     nw=1000
     eta=0.02
     w = np.linspace(wmin,wmax,nw)
+
     fn = "g_coeffs.dat"
     f = open(fn,"r")
-    na, nspin, norb = [int(x) for x in f.readline().split()]
-    for ia in range(1,na+1):
-        for ispin in range(1,nspin+1):
-            for iorb in range(1,norb+1):
-                print "Calculating (ia,ispin,iorb)=(%d,%d,%d)"%(ia,ispin,iorb)
+    nstep, norb = [int(x) for x in f.readline().split()]
+    for ispin in range(1,2):
+        for iorb in range(1,norb+1):
+            print "Calculating (iorb,ispin)=(%d,%d)"%(iorb,ispin)
 
-                fout = open("Aw.%d.%d.%d.dat"%(ia,ispin,iorb),"w")
+            fout = open("Aw.%d.%d.dat"%(iorb,ispin),"w")
 
-                nstep, nev = [int(x) for x in f.readline().split()]
+            ev = float(f.readline().split()[2])
 
-                Aw = np.zeros(nw,dtype=np.float64)
+            Aw = np.zeros(nw, dtype=np.float64)
 
-                for iev in range(0,nev):
-                    even, o1,o2,o3,o4, ev, prob = f.readline().split()
-                    ev = np.float64(ev)
-                    prob = np.float64(prob)
-                    ap = np.zeros(nstep,dtype=np.float64)
-                    bp = np.zeros(nstep,dtype=np.float64)
-                    an = np.zeros(nstep,dtype=np.float64)
-                    bn = np.zeros(nstep,dtype=np.float64)
-                    for istep in range(0,nstep):
-                        d1,d2,d3,d4 = [float(x) for x in f.readline().split()]
-                        ap[istep] = d1
-                        bp[istep] = d2
-                        an[istep] = d3
-                        bn[istep] = d4
+            ap = np.zeros(nstep,dtype=np.float64)
+            bp = np.zeros(nstep,dtype=np.float64)
+            an = np.zeros(nstep,dtype=np.float64)
+            bn = np.zeros(nstep,dtype=np.float64)
+            for istep in range(0,nstep):
+                d1,d2,d3,d4 = [float(x) for x in f.readline().split()]
+                ap[istep] = d1
+                bp[istep] = d2
+                an[istep] = d3
+                bn[istep] = d4
 
-                    # continued fraction calculation
-                    i = 0
-                    for wp in w:
-                        z = wp+ev+eta*1j
-                        gr = continued_fraction_p(z, nstep, ap, bp)
-                        gr = gr*prob
-                        Aw[i] += -1/np.pi*gr.imag
-                        z = wp-ev+eta*1j
-                        gr = continued_fraction_m(z, nstep, ap, bp)
-                        gr = gr*prob
-                        Aw[i] += -1/np.pi*gr.imag
-                        i+=1
-                i = 0
-                for wp in w:
-                    fout.write("%e %e\n"%(wp,Aw[i]))
-                    i+=1
-                fout.close()
+            # continued fraction calculation
+            i = 0
+            for wp in w:
+                z = wp+ev+eta*1j
+                gr = continued_fraction_p(z, nstep, ap, bp)
+                Aw[i] += -1/np.pi*gr.imag
+                z = wp-ev+eta*1j
+                gr = continued_fraction_m(z, nstep, ap, bp)
+                Aw[i] += -1/np.pi*gr.imag
+                i+=1
+            i = 0
+            for wp in w:
+                fout.write("%e %e\n"%(wp,Aw[i]))
+                i+=1
+            fout.close()
     f.close()
 
 def continued_fraction_p(z,nstep,ap,bp):

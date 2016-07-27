@@ -1,11 +1,11 @@
 module dmft_green
     use mpi
     use io_units
+    use constants
     use dmft_params, only: norb, nbath, nspin, sectors, maxnstep
     use dmft_grid, only: nwloc, omega
     use ed_basis, only: basis_t, dealloc_basis, generate_basis
     use eigpair, only: eigpair_t
-    use constants
 
     implicit none
 
@@ -54,12 +54,19 @@ contains
         double complex, intent(out) :: G_cl(nwloc,norb,nspin)
 
         logical :: even
-        integer :: isector, ne_u, ne_d, iorb
+        integer :: isector, ne_u, ne_d, iorb, i
         type(basis_t) :: basis
         double complex, allocatable :: g_diag(:,:)
+        double precision, allocatable :: ap(:), bp(:), am(:), bm(:)
 
         G_cl = 0.d0
         allocate(g_diag(nwloc,2))
+        allocate(ap(maxnstep),bp(maxnstep),am(maxnstep),bm(maxnstep))
+
+        if (master) then
+            open(unit=IO_G_COEFFS, file=FN_G_COEFFS, status="replace")
+            write(IO_G_COEFFS,*) maxnstep, norb
+        endif
 
         do iorb=1,norb
             isector = gs%isector
@@ -76,12 +83,29 @@ contains
             
             ! G_{iorb,up}
             call green_diag( iorb, 1, basis, gs, em, ek, vmk, &
-                             g_diag )
+                             g_diag, ap, bp, am, bm )
+
+            ! dump lanczos coefficients
+            if (master) then
+                write(IO_G_COEFFS,"(2I4,1x,F)") iorb, 1, gs%val
+                do i=1,maxnstep
+                    write(IO_G_COEFFS,"(4(F,1x))") ap(i), bp(i), am(i), bm(i)
+                enddo
+            endif
 
             if (.not.even) then
                 ! if not spin even, calculates G_{iorb,dn}
                 call green_diag( iorb, 2, basis, gs, em, ek, vmk, &
-                                 g_diag )
+                                 g_diag, ap, bp, am, bm )
+            endif
+
+            ! Whether even or not, dump spin lanczos coefficients for spin down.
+            ! If even, these will be the same as spin up coefficients.
+            if (master) then
+                write(IO_G_COEFFS,"(2I4,1x,F)") iorb, 2, gs%val
+                do i=1,maxnstep
+                    write(IO_G_COEFFS,"(4(F,1x))") ap(i), bp(i), am(i), bm(i)
+                enddo
             endif
 
             if (nspin==1 .and. even) then
@@ -96,6 +120,9 @@ contains
             call dealloc_basis(basis)
         enddo
 
+        if (master) then
+            close(IO_G_COEFFS)
+        endif
     end subroutine cluster_green_ftn 
 
     subroutine local_green_ftn( em, D_cl, G_cl, G_loc )
@@ -143,7 +170,8 @@ contains
     ! PRIVATE subroutines
     ! =========================================================================
 
-    subroutine green_diag( iorb, ispin, basis, gs, em, ek, vmk, g_diag )
+    subroutine green_diag( iorb, ispin, basis, gs, em, ek, vmk, &
+                           g_diag, ap, bp, am, bm )
         ! @TODO move lanczos_iteration subroutine to a separate module
         use lanczos_solver, only: lanczos_iteration
         use numeric_utils, only: continued_fraction_m, continued_fraction_p, &
@@ -154,14 +182,16 @@ contains
         type(basis_t), intent(in) :: basis
         type(eigpair_t), intent(in) :: gs
         double precision, intent(in) :: em(norb,2), ek(nbath,2), vmk(norb,nbath,2)
-        double complex, intent(out) :: g_diag(nwloc,2)
+        double precision, intent(out) :: &
+            ap(maxnstep), bp(maxnstep), &
+            am(maxnstep), bm(maxnstep)
+        double complex, intent(out) :: &
+            g_diag(nwloc,2)
 
         type(basis_t) :: basis_out
         integer :: nstep, nlocup, iw
-        double precision, allocatable :: v_init(:), a(:), b(:)
+        double precision, allocatable :: v_init(:)
         double complex :: z, gr
-
-        allocate(a(maxnstep),b(maxnstep))
 
         g_diag(:,ispin) = 0.d0
 
@@ -181,13 +211,13 @@ contains
         call apply_c(basis, gs%vec, 1, iorb, ispin, basis_out, v_init)
 
         ! 2. lanczos coefficients
-        call lanczos_iteration( em, ek, vmk, basis_out, v_init, nstep, a, b )
-        b(1) = mpi_norm(v_init, basis_out%nloc)
+        call lanczos_iteration( em, ek, vmk, basis_out, v_init, nstep, ap, bp )
+        bp(1) = mpi_norm(v_init, basis_out%nloc)
 
         ! 3. green function as a continued fraction
         do iw=1,nwloc
             z = cmplx(gs%val, omega(iw))
-            gr = continued_fraction_p(z, nstep, a, b)
+            gr = continued_fraction_p(z, nstep, ap, bp)
             g_diag(iw,ispin) = g_diag(iw,ispin)+gr
         enddo
 
@@ -211,13 +241,13 @@ contains
         call apply_c(basis, gs%vec, 2, iorb, ispin, basis_out, v_init)
 
         ! 2. lanczos coefficients
-        call lanczos_iteration( em, ek, vmk, basis_out, v_init, nstep, a, b )
-        b(1) = mpi_norm(v_init, basis_out%nloc)
+        call lanczos_iteration( em, ek, vmk, basis_out, v_init, nstep, am, bm )
+        bm(1) = mpi_norm(v_init, basis_out%nloc)
 
         ! 3. green function as a continued fraction
         do iw = 1,nwloc
             z = cmplx(-gs%val, omega(iw))
-            gr = continued_fraction_m(z, nstep, a, b)
+            gr = continued_fraction_m(z, nstep, am, bm)
             
             g_diag(iw,ispin) = g_diag(iw,ispin)+gr
         enddo
