@@ -59,8 +59,6 @@ subroutine dmft
     ! initial impurity hamiltonian parameters
     call initial_h_imp_params( em, ek, vmk )
 
-    call cluster_hybridization_ftn( ek, vmk, D_cl )
-
     ! Main DMFT loop
     converged = .false.
     dmftloop: do iloop=1,nloop
@@ -76,32 +74,40 @@ subroutine dmft
 
         t1_loop = mpi_wtime(mpierr)
 
+        if (iloop>1) then
+            ! find new em, ek, vmk 
+            call fit_h_imp_params( em, ek, vmk, D_cl, G_cl, G_loc )
+        endif
+
+        call cluster_hybridization_ftn( ek, vmk, D_cl )
+
         call ground_state( em, ek, vmk, gs )
 
         call cluster_green_ftn( em, ek, vmk, gs, G_cl )
 
         call local_green_ftn( em, D_cl, G_cl, G_loc )
-        open(unit=123,file="green.dump",status="replace")
-        do iw=1,nwloc
-            write(123,"(5F12.6)") omega(iw), real(G_cl(iw,1,1)), aimag(G_cl(iw,1,1)),&
-                        real(G_loc(iw,1,1)), aimag(G_loc(iw,1,1))
-        enddo
-        close(123)
+
+        if (master) then
+            open(unit=123,file="green.dump",status="replace")
+            do iw=1,nwloc
+                write(123,"(5F12.6)") omega(iw), real(G_cl(iw,1,1)), aimag(G_cl(iw,1,1)),&
+                            real(G_loc(iw,1,1)), aimag(G_loc(iw,1,1))
+            enddo
+            close(123)
+        endif
 
         call test_convergence( G_cl, G_loc, diff, converged )
 
         if (master) then
-            write(*,*) "|G_cl - G_loc| = ", diff
-            if (converged) then
-                write(*,*) "DMFT loop has converged within ",iloop," iterations."
-                exit dmftloop
-            endif
+            write(*,*) "DMFT SCF condition |G_cl - G_loc|^2 = ", diff
         endif
 
-        ! find new em, ek, vmk 
-        call fit_h_imp_params( em, ek, vmk, D_cl, G_cl, G_loc )
-
-        call cluster_hybridization_ftn( ek, vmk, D_cl )
+        if (converged) then
+            if (master) then
+                write(*,*) "DMFT loop has converged within ",iloop," iterations."
+            endif
+            exit dmftloop
+        endif
 
         t2_loop = mpi_wtime(mpierr)
     enddo dmftloop
@@ -118,10 +124,21 @@ subroutine test_convergence( G_cl, G_loc, diff, converged )
         G_loc(nwloc, norb, nspin)
 
     logical, intent(out) :: converged
-                                 
-    double precision :: diff_loc, diff
+    double precision :: d, diff_loc, diff
 
-    diff_loc = sum(abs(G_cl-G_loc)) / (norb*nbath)
+    integer :: iw, iorb, ispin
+
+    diff_loc = 0.d0
+    do ispin=1,nspin
+        do iorb=1,norb
+            do iw=1,nwloc
+                d = abs(G_cl(iw,iorb,ispin)-G_loc(iw,iorb,ispin))
+                diff_loc = diff_loc + d*d
+            enddo
+        enddo
+    enddo
+
+    diff_loc = diff_loc / (norb*nbath*nw)
     call mpi_allreduce( diff_loc, diff, 1, mpi_double_precision, &
                         mpi_sum, comm, mpierr )
 
