@@ -84,6 +84,8 @@ subroutine dmft
 
         call local_green_ftn( em, D_cl, G_cl, G_loc )
 
+        call dump_data( em, ek, vmk, D_cl, G_cl, G_loc )
+
         call test_convergence( G_cl, G_loc, diff, converged )
 
         if (master) then
