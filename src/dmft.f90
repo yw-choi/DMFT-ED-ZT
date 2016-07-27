@@ -38,9 +38,6 @@ subroutine dmft
     double precision :: diff
     character(len=200) :: msg
     
-    ! @TODO remove the following debugging variables
-    integer :: iw
-    
     ! Read run parameters from input fdf file
     call dmft_params_read
 
@@ -86,15 +83,6 @@ subroutine dmft
         call cluster_green_ftn( em, ek, vmk, gs, G_cl )
 
         call local_green_ftn( em, D_cl, G_cl, G_loc )
-
-        if (master) then
-            open(unit=123,file="green.dump",status="replace")
-            do iw=1,nwloc
-                write(123,"(5F12.6)") omega(iw), real(G_cl(iw,1,1)), aimag(G_cl(iw,1,1)),&
-                            real(G_loc(iw,1,1)), aimag(G_loc(iw,1,1))
-            enddo
-            close(123)
-        endif
 
         call test_convergence( G_cl, G_loc, diff, converged )
 

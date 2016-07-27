@@ -62,6 +62,10 @@ contains
         ! do ix=1,nx
         !     print *, df1(ix), df2(ix)
         ! enddo
+        if (master) then
+            write(*,"(1x,a,I6,a,E12.4)") &
+                "Finding new em, ek, vmk ... "
+        endif
 
         call FRPRMN( x, nx, tol, itr, diff )
         

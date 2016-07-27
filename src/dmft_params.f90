@@ -7,23 +7,29 @@ module dmft_params
     integer ::          &
         nspin,          & ! number of spin components 
         norb,           & ! number of impurity orbitals
-        nbath,          & ! number of bath sites
+        nbath,          & ! number of bath orbitals
         nsite,          & ! norb+nbath
         nloop,          & ! maximum number of DMFT loop
         nsector,        & ! number of hamiltonain sector in (Q,Sz) basis
-        maxnstep,       & ! number of steps in calculating continued fraction 
+        maxnstep,       & ! number of lanczos iterations
+                          ! to compute cluster Green's function, and
+                          ! the ground state when DiagSolver == 1.
         nw,             & ! Total number of matsubara frequencies
         diag_solver,    & ! diagonalization solver
+        init_h_imp,     & ! initial impurity hamiltonian parameters
+                          ! 1 = from input fdf
+                          ! 2 = from h_imp.save
+                          ! 3 = random number b/w -1 and 1
+                          ! 4 = fitting the given G0
         tbham             ! type of tight-binding hamiltonian
                           ! 0 : read from file
                           ! 1 : 2d square lattice
-                          ! 2 : bethe lattice, infinite dimension (circular dos)
+                          ! 2 : bethe lattice, infinite dimension(semicircular dos)
 
     logical :: &
         em_present,         &
         ek_present,         &
-        vmk_present,        &
-        read_gf_from_file
+        vmk_present
 
     double precision ::     &
         U,                  & ! U
@@ -115,6 +121,8 @@ contains
             enddo
         endif
 
+        init_h_imp = fdf_get("InitialImpurityHamiltonian", 1)
+
         allocate(em_input(norb,2), ek_input(nbath,2))
         allocate(vmk_input(norb,nbath,2))
 
@@ -175,8 +183,6 @@ contains
             endif
         endif
 
-        read_gf_from_file = fdf_get("ReadGreenFtn", .false.)
-
         diag_solver = fdf_get("DiagSolver", 1)
 
         if (master) then
@@ -224,9 +230,6 @@ contains
 
             write(msg,*) "Diagonalization Solver"
             write(6,FMT_INT) msg, '=', diag_solver
-
-            write(msg,*) "Read Green's function from file"
-            write(6,FMT_LOGICAL) msg, '=', read_gf_from_file
 
             write(6,'(a)') repeat("=",80)
             write(6,*)
