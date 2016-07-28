@@ -2,9 +2,11 @@ module impurity_hamiltonian
 
     use mpi
     use dmft_params, only: nsite, norb, nbath, nspin, U, Up, Jex, Jp, mu, &
-                           em_input, ek_input, vmk_input
+                           em_input, ek_input, vmk_input, init_h_imp, &
+                           em_present, ek_present, vmk_present
 
     use ed_basis, only: basis_t, ed_basis_get, ed_basis_idx
+    use utils, only: die
 
     implicit none
 
@@ -18,11 +20,21 @@ contains
 
         integer :: ispin, iorb, ibath, i, j
 
-        ! @TODO read h_imp params from the save file
-
-        em = em_input
-        ek = ek_input
-        vmk = vmk_input
+        select case (init_h_imp)
+            case (1)
+                if (.not.em_present.or..not.ek_present.or..not.vmk_present) then
+                    call die("initial_h_imp_params", "input is not given")
+                endif
+                em = em_input
+                ek = ek_input
+                vmk = vmk_input
+            case (2)
+                call import_h_imp_params( em, ek, vmk )
+            case (3)
+                call init_random( em, ek, vmk )
+            case default
+                call die("initial_h_imp_params", "not implemented")
+        end select
 
         if (master) then
             write(*,*) 
@@ -259,4 +271,86 @@ contains
             endif
         enddo
     end function sgn2
+
+    subroutine import_h_imp_params( em, ek, vmk )
+        use io_units
+        double precision, intent(out) :: &
+            em(norb,2), &
+            ek(nbath,2), &
+            vmk(norb,nbath,2)
+
+        integer :: norb2, nbath2, nspin2, ispin, iorb, ibath
+
+        logical :: found
+
+        if (master) then
+            inquire(file=FN_H_PARAMS, exist=found)
+            if (.not.found) then
+                call die("import_h_imp_params", "h_imp.dat not found")
+            endif
+            open(unit=IO_H_PARAMS,file=FN_H_PARAMS,status="old")
+            read(IO_H_PARAMS,*) norb2, nbath2, nspin2
+            if (norb2/=norb.or.nbath2/=nbath.or.nspin2/=nspin) then
+                call die("import_h_imp_params", "dimension mismatch.")
+            endif
+            do ispin=1,nspin
+                do iorb=1,norb
+                    read(IO_H_PARAMS,*) em(iorb,ispin)
+                enddo
+                do ibath=1,nbath
+                    read(IO_H_PARAMS,*) ek(ibath,ispin)
+                enddo
+                do ibath=1,nbath
+                    do iorb=1,norb
+                        read(IO_H_PARAMS,*) vmk(iorb,ibath,ispin)
+                    enddo
+                enddo
+            enddo
+
+            if (nspin==1) then
+                em(:,2) = em(:,1)
+                ek(:,2) = ek(:,1)
+                vmk(:,:,2) = vmk(:,:,1)
+            endif
+
+            close(IO_H_PARAMS)
+        endif
+        call mpi_bcast(em, norb*2, mpi_double_precision, 0, comm, mpierr)
+        call mpi_bcast(ek, nbath*2, mpi_double_precision, 0, comm, mpierr)
+        call mpi_bcast(vmk, norb*nbath*2, mpi_double_precision, 0, comm, mpierr)
+    end subroutine import_h_imp_params
+
+    subroutine init_random( em, ek, vmk )
+        double precision, intent(out) :: &
+            em(norb,2), &
+            ek(nbath,2), &
+            vmk(norb,nbath,2)
+        integer :: ispin, iorb, ibath
+
+        double precision :: r
+
+        if (master) then
+            call random_seed
+            do ispin=1,2
+                do iorb=1,norb
+                    call random_number(r)
+                    em(iorb,ispin) = r*2-1
+                enddo
+                do ibath=1,nbath
+                    call random_number(r)
+                    ek(ibath,ispin) = r*2-1
+                enddo
+                do ibath=1,nbath
+                    do iorb=1,norb
+                        call random_number(r)
+                        vmk(iorb,ibath,ispin) = r*2-1
+                    enddo
+                enddo
+            enddo
+        endif
+        
+        call mpi_bcast(em, norb*2, mpi_double_precision, 0, comm, mpierr)
+        call mpi_bcast(ek, nbath*2, mpi_double_precision, 0, comm, mpierr)
+        call mpi_bcast(vmk, norb*nbath*2, mpi_double_precision, 0, comm, mpierr)
+    end subroutine init_random
 end module impurity_hamiltonian

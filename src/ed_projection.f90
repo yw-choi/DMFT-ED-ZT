@@ -34,7 +34,7 @@ contains
         integer :: ispin, iorb, ibath, ix, itr
         double precision :: tol, diff
 
-        tol = 1.d-8
+        tol = 1.d-6
 
         nx = nspin*(norb + nbath + norb*nbath)
 
@@ -199,7 +199,7 @@ contains
 
         call mpi_allreduce(func_loc,func,1,mpi_double_precision,&
                            mpi_sum,comm,mpierr)
-        func = func/(norb*nspin)
+        func = func/(norb*nspin*nw)
     end function func
 
     double precision function weight(iw)
@@ -285,7 +285,7 @@ contains
         enddo
 
         call mpi_allreduce(df_loc,df,nx,mpi_double_precision,mpi_sum,comm,mpierr)
-         df = df/(norb*nspin)
+         df = df/(norb*nspin*nw)
     end subroutine dfunc
 
     subroutine ndfunc(x,df)

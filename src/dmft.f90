@@ -97,8 +97,11 @@ subroutine dmft
         t2_loop = mpi_wtime(mpierr)
     enddo dmftloop
 
-    call post_process( em, ek, vmk, D_cl, G_cl, G_loc )
+    call post_process( em, ek, vmk, D_cl, G_cl, G_loc, gs )
 
+    deallocate(G_cl, G_loc, D_cl)
+    deallocate(em, ek, vmk)
+    deallocate(gs%vec)
 end subroutine dmft
 
 subroutine test_convergence( G_cl, G_loc, diff, converged )

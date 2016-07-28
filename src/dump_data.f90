@@ -67,7 +67,7 @@ subroutine dump_data( em, ek, vmk, D_cl, G_cl, G_loc )
                 0, comm, mpierr)
 
             if (master) then
-                write(fn,"(A10,A1,I1,A1,I1)") FN_GR, ".", iorb, ".", ispin
+                write(fn,"(A9,A1,I1,A1,I1)") FN_GR, ".", iorb, ".", ispin
                 open(unit=IO_GR, file=fn, status="replace")
                 write(IO_GR,*) nw, iorb, ispin
 
