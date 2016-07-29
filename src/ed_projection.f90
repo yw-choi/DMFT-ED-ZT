@@ -15,7 +15,7 @@ module ed_projection
         G_cl_old(:,:,:), &
         G_loc_old(:,:,:)
 
-    integer :: nx
+    integer :: nx, ispin
 
     private
 contains
@@ -31,12 +31,12 @@ contains
             G_loc(nwloc,norb,nspin)
 
         double precision, allocatable :: x(:), df1(:), df2(:)
-        integer :: ispin, iorb, ibath, ix, itr
+        integer :: iorb, ibath, ix, itr
         double precision :: tol, diff
 
         tol = 1.d-6
 
-        nx = nspin*(norb + nbath + norb*nbath)
+        nx = norb + nbath + norb*nbath
 
         allocate(D_cl_old(nwloc,norb,nspin), G_cl_old(nwloc,norb,nspin))
         allocate(G_loc_old(nwloc,norb,nspin), em_old(norb,nspin))
@@ -47,34 +47,37 @@ contains
         G_loc_old = G_loc
         em_old = em
 
-        call emk_to_x( em, ek, vmk, x )
-
-        ! ! test analytic derivative against numerical one
-        ! print *, "em", em
-        ! print *, "ek", ek
-        ! print *, "vmk", vmk
-        ! print *, "x", x
-        ! print *, "func(x)", func(x)
-        ! call dfunc(x,df1)
-        ! call ndfunc(x,df2)
-        ! print *, "derivative diff = ", sum(df1-df2)
-        ! print *, "df1          df2"
-        ! do ix=1,nx
-        !     print *, df1(ix), df2(ix)
-        ! enddo
         if (master) then
             write(*,"(1x,a,I6,a,E12.4)") &
                 "Finding new em, ek, vmk ... "
         endif
 
-        call FRPRMN( x, nx, tol, itr, diff )
-        
-        call x_to_emk( x, em, ek, vmk )
+        do ispin=1,nspin
+            call emk_to_x( em, ek, vmk, x )
 
-        if (master) then
-            write(*,"(1x,a,I6,a,E12.4)") &
-                "fitting procedure converged : itr=",itr,", diff=",diff
-        endif
+            ! test analytic derivative against numerical one
+            ! print *, "em", em
+            ! print *, "ek", ek
+            ! print *, "vmk", vmk
+            ! print *, "x", x
+            ! print *, "func(x)", func(x)
+            ! call dfunc(x,df1)
+            ! call ndfunc(x,df2)
+            ! print *, "derivative diff = ", sum(df1-df2)
+            ! print *, "df1          df2"
+            ! do ix=1,nx
+            !     print *, df1(ix), df2(ix)
+            ! enddo
+
+            call FRPRMN( x, nx, tol, itr, diff )
+            if (master) then
+                write(*,"(1x,a,I6,a,E12.4)") &
+                    "fitting procedure converged : itr=",itr,", diff=",diff
+            endif
+            
+            call x_to_emk( x, em, ek, vmk )
+        enddo
+
 
         ! for paramagnetic runs, set ek and vk spin independent
         if (nspin.eq.1) then
@@ -82,7 +85,6 @@ contains
             em(:,2) = em(:,1)
             vmk(:,:,2) = vmk(:,:,1)
         endif
-
 
         if (master) then
             write(*,*) 
@@ -122,22 +124,20 @@ contains
     subroutine emk_to_x( em, ek, vmk, x )
         double precision, intent(in) :: em(norb,2), ek(nbath,2), vmk(norb,nbath,2)
         double precision, intent(out) :: x(nx)
-        integer :: iorb,ibath,ispin,ix
+        integer :: iorb,ibath,ix
         ix=0
-        do ispin=1,nspin
+        do iorb=1,norb
+            ix = ix+1
+            x(ix) = em(iorb,ispin)
+        enddo
+        do ibath=1,nbath
+            ix = ix+1
+            x(ix) = ek(ibath,ispin)
+        enddo
+        do ibath=1,nbath
             do iorb=1,norb
                 ix = ix+1
-                x(ix) = em(iorb,ispin)
-            enddo
-            do ibath=1,nbath
-                ix = ix+1
-                x(ix) = ek(ibath,ispin)
-            enddo
-            do ibath=1,nbath
-                do iorb=1,norb
-                    ix = ix+1
-                    x(ix) = vmk(iorb,ibath,ispin) 
-                enddo
+                x(ix) = vmk(iorb,ibath,ispin) 
             enddo
         enddo
     end subroutine emk_to_x
@@ -145,22 +145,20 @@ contains
     subroutine x_to_emk( x, em, ek, vmk )
         double precision, intent(in) :: x(nx)
         double precision, intent(out) :: em(norb,2), ek(nbath,2), vmk(norb,nbath,2)
-        integer :: iorb,ibath,ispin,ix
+        integer :: iorb,ibath,ix
         ix=0
-        do ispin=1,nspin
+        do iorb=1,norb
+            ix = ix+1
+            em(iorb,ispin) = x(ix)  
+        enddo
+        do ibath=1,nbath
+            ix = ix+1
+            ek(ibath,ispin) = x(ix) 
+        enddo
+        do ibath=1,nbath
             do iorb=1,norb
                 ix = ix+1
-                em(iorb,ispin) = x(ix)  
-            enddo
-            do ibath=1,nbath
-                ix = ix+1
-                ek(ibath,ispin) = x(ix) 
-            enddo
-            do ibath=1,nbath
-                do iorb=1,norb
-                    ix = ix+1
-                    vmk(iorb,ibath,ispin) = x(ix)
-                enddo
+                vmk(iorb,ibath,ispin) = x(ix)
             enddo
         enddo
     end subroutine x_to_emk
@@ -170,7 +168,7 @@ contains
         double precision :: x(nx)
 
         double precision :: func_loc, fr, fi
-        integer :: iw, iorb, ibath, ispin
+        integer :: iw, iorb, ibath
 
         double complex :: diff, D_cl_new(nwloc,norb,nspin)
         double precision :: &
@@ -183,23 +181,21 @@ contains
         call cluster_hybridization_ftn( ek, vmk, D_cl_new )
 
         func_loc = 0.0d0
-        do ispin=1,nspin
-            do iorb=1,norb
-                do iw=1,nwloc
-                    diff = em(iorb,ispin)-em_old(iorb,ispin) &
-                     + D_cl_new(iw,iorb,ispin) - D_cl_old(iw,iorb,ispin) &
-                     + 1.d0/G_loc_old(iw,iorb,ispin) - 1.d0/G_cl_old(iw,iorb,ispin)
+        do iorb=1,norb
+            do iw=1,nwloc
+                diff = em(iorb,ispin)-em_old(iorb,ispin) &
+                 + D_cl_new(iw,iorb,ispin) - D_cl_old(iw,iorb,ispin) &
+                 + 1.d0/G_loc_old(iw,iorb,ispin) - 1.d0/G_cl_old(iw,iorb,ispin)
 
-                    absdiff = abs(diff)
-                        
-                    func_loc = func_loc + absdiff*absdiff*weight(iw)
-                enddo
+                absdiff = abs(diff)
+                    
+                func_loc = func_loc + absdiff*absdiff*weight(iw)
             enddo
         enddo
 
         call mpi_allreduce(func_loc,func,1,mpi_double_precision,&
                            mpi_sum,comm,mpierr)
-        func = func/(norb*nspin*nw)
+        func = func/(norb*nw)
     end function func
 
     double precision function weight(iw)
@@ -213,7 +209,7 @@ contains
         double precision, intent(out) :: df(nx)
         
         double precision :: df_loc(nx)
-        integer :: iw, iorb, ibath, ispin, ix
+        integer :: iw, iorb, ibath, ix
 
         double complex :: D_cl_new(nwloc,norb,nspin), &
                           diff(nwloc,norb,nspin), &
@@ -227,65 +223,59 @@ contains
         call x_to_emk( x, em, ek, vmk )
         call cluster_hybridization_ftn( ek, vmk, D_cl_new )
 
-        do ispin=1,nspin
+        do iorb=1,norb
+            do iw=1,nwloc
+                diff(iw,iorb,ispin) = em(iorb,ispin)-em_old(iorb,ispin) &
+                 + D_cl_new(iw,iorb,ispin) - D_cl_old(iw,iorb,ispin) &
+                 + 1.d0/G_loc_old(iw,iorb,ispin) - 1.d0/G_cl_old(iw,iorb,ispin)
+            enddo
+        enddo
+
+        ! df/dx w.r.t. em(iorb,ispin)
+        do iorb=1,norb
+            ix = iorb
+            df_loc(ix) = 0.d0
+            do iw=1,nwloc
+                df_loc(ix) = df_loc(ix) &
+                             + weight(iw)*2*real(diff(iw,iorb,ispin))
+            enddo
+        enddo
+        ! df/dx w.r.t. ek(ibath,ispin)
+        do ibath=1,nbath
+            ix = norb + ibath
+            
+            df_loc(ix) = 0.d0
+
             do iorb=1,norb
                 do iw=1,nwloc
-                    diff(iw,iorb,ispin) = em(iorb,ispin)-em_old(iorb,ispin) &
-                     + D_cl_new(iw,iorb,ispin) - D_cl_old(iw,iorb,ispin) &
-                     + 1.d0/G_loc_old(iw,iorb,ispin) - 1.d0/G_cl_old(iw,iorb,ispin)
+                    fac = vmk(iorb,ibath,ispin)**2
+                    fac = fac/(cmplx(0.d0,-omega(iw))-ek(ibath,ispin))**2
+
+                    df_loc(ix) = df_loc(ix) &
+                        + weight(iw)*2*real(diff(iw,iorb,ispin)*fac)
                 enddo
             enddo
         enddo
 
-
-        do ispin=1,nspin
-            ! df/dx w.r.t. em(iorb,ispin)
+        ! df/dx w.r.t. vmk(iorb,ibath,ispin)
+        do ibath=1,nbath
             do iorb=1,norb
-                ix = (ispin-1)*(norb+nbath+norb*nbath) + iorb
+                ix = norb + nbath + (ibath-1)*norb + iorb
+
                 df_loc(ix) = 0.d0
+
                 do iw=1,nwloc
+                    fac = 2*vmk(iorb,ibath,ispin)
+                    fac = fac/(cmplx(0.d0,-omega(iw))-ek(ibath,ispin))
+
                     df_loc(ix) = df_loc(ix) &
-                                 + weight(iw)*2*real(diff(iw,iorb,ispin))
-                enddo
-            enddo
-            ! df/dx w.r.t. ek(ibath,ispin)
-            do ibath=1,nbath
-                ix = (ispin-1)*(norb+nbath+norb*nbath) + norb + ibath
-                
-                df_loc(ix) = 0.d0
-
-                do iorb=1,norb
-                    do iw=1,nwloc
-                        fac = vmk(iorb,ibath,ispin)**2
-                        fac = fac/(cmplx(0.d0,-omega(iw))-ek(ibath,ispin))**2
-
-                        df_loc(ix) = df_loc(ix) &
-                            + weight(iw)*2*real(diff(iw,iorb,ispin)*fac)
-                    enddo
-                enddo
-            enddo
-
-            ! df/dx w.r.t. vmk(iorb,ibath,ispin)
-            do ibath=1,nbath
-                do iorb=1,norb
-                    ix = (ispin-1)*(norb+nbath+norb*nbath) + norb + nbath &
-                        + (ibath-1)*norb + iorb
-
-                    df_loc(ix) = 0.d0
-
-                    do iw=1,nwloc
-                        fac = 2*vmk(iorb,ibath,ispin)
-                        fac = fac/(cmplx(0.d0,-omega(iw))-ek(ibath,ispin))
-
-                        df_loc(ix) = df_loc(ix) &
-                            + weight(iw)*2*real(diff(iw,iorb,ispin)*fac)
-                    enddo
+                        + weight(iw)*2*real(diff(iw,iorb,ispin)*fac)
                 enddo
             enddo
         enddo
 
         call mpi_allreduce(df_loc,df,nx,mpi_double_precision,mpi_sum,comm,mpierr)
-         df = df/(norb*nspin*nw)
+         df = df/(norb*nw)
     end subroutine dfunc
 
     subroutine ndfunc(x,df)

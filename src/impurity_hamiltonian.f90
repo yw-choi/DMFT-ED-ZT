@@ -4,8 +4,9 @@ module impurity_hamiltonian
     use dmft_params, only: nsite, norb, nbath, nspin, U, Up, Jex, Jp, mu, &
                            em_input, ek_input, vmk_input, init_h_imp, &
                            em_present, ek_present, vmk_present
-
+    use dmft_grid, only: nwloc, omega
     use ed_basis, only: basis_t, ed_basis_get, ed_basis_idx
+    use ed_projection, only: fit_h_imp_params 
     use utils, only: die
 
     implicit none
@@ -32,6 +33,8 @@ contains
                 call import_h_imp_params( em, ek, vmk )
             case (3)
                 call init_random( em, ek, vmk )
+            case (4)
+                call init_fit( em, ek, vmk )
             case default
                 call die("initial_h_imp_params", "not implemented")
         end select
@@ -353,4 +356,28 @@ contains
         call mpi_bcast(ek, nbath*2, mpi_double_precision, 0, comm, mpierr)
         call mpi_bcast(vmk, norb*nbath*2, mpi_double_precision, 0, comm, mpierr)
     end subroutine init_random
+    
+    subroutine init_fit( em, ek, vmk )
+        double precision, intent(out) :: &
+            em(norb,2), &
+            ek(nbath,2), &
+            vmk(norb,nbath,2)
+
+        integer :: iw
+        double complex, allocatable :: &
+            G_cl(:,:,:),      & ! G_cl(nwloc,norb,nspin) 
+            G_loc(:,:,:),     & ! G_loc(nwloc,norb,nspin)
+            D_cl(:,:,:)         ! D_cl(nwloc,norb,nspin)
+        allocate(G_cl(nwloc,norb,nspin), G_loc(nwloc,norb,nspin))
+        allocate(D_cl(nwloc,norb,nspin))
+
+        do iw=1,nwloc
+            G_cl(iw,:,:) = 1/cmplx(0.d0,omega(iw))
+            G_loc(iw,:,:) = 1/cmplx(0.d0,omega(iw))
+        enddo
+        D_cl = 0.25d0*G_cl
+
+        ! find new em, ek, vmk 
+        call fit_h_imp_params( em, ek, vmk, D_cl, G_cl, G_loc )
+    end subroutine init_fit
 end module impurity_hamiltonian

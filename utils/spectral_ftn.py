@@ -11,7 +11,7 @@ def main():
     fn = "g_coeffs.dat"
     f = open(fn,"r")
     nstep, norb = [int(x) for x in f.readline().split()]
-    for ispin in range(1,2):
+    for ispin in range(1,3):
         for iorb in range(1,norb+1):
             print "Calculating (iorb,ispin)=(%d,%d)"%(iorb,ispin)
 

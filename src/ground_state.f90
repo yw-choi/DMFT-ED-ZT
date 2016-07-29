@@ -74,8 +74,7 @@ subroutine ground_state(em, ek, vmk, gs)
 
     if (master) then
         write(*,"(1x,a,I2,a2,I2,a2,I,a)") &
-            "Ground state is at sector (ne_up, ne_dn, dim) = (",&
-                            basis%ne_up,", ",basis%ne_down,", ",basis%ntot,")" 
+            "Ground state is at sector ", gs%isector 
     endif
 
     call mpi_barrier(comm, mpierr)

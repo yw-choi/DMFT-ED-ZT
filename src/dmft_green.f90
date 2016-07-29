@@ -2,7 +2,7 @@ module dmft_green
     use mpi
     use io_units
     use constants
-    use dmft_params, only: norb, nbath, nspin, sectors, maxnstep
+    use dmft_params, only: norb, nbath, nspin, sectors, maxnstep, hfield
     use dmft_grid, only: nwloc, omega
     use ed_basis, only: basis_t, dealloc_basis, generate_basis
     use eigpair, only: eigpair_t
@@ -137,9 +137,12 @@ contains
 
         integer :: iw, iorb, ispin, ix, ne
 
-        double precision :: val,x
+        double precision :: val,x,hs(2)
 
         ne = 10000
+
+        hs(1) = hfield
+        hs(2) = -hfield
 
         ! @TODO implemented only for the Bethe-lattice
         ! G_loc = 4.d0*D_cl
@@ -154,6 +157,7 @@ contains
                         G_loc(iw,iorb,ispin) = G_loc(iw,iorb,ispin) + &
                             2.d0/pi*sqrt(max(val,0.d0))/&
                             (em(iorb,ispin) &
+                            + hs(ispin) &
                             + D_cl(iw,iorb,ispin) &
                             + 1.0d0/G_cl(iw,iorb,ispin) &
                             - x)

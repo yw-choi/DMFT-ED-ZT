@@ -32,6 +32,7 @@ module dmft_params
         vmk_present
 
     double precision ::     &
+        hfield,             & ! small symmetry-breaking magnetic field
         U,                  & ! U
         Up,                 & ! U', U'=U-2J with rotational invariance
         Jex,                & ! J 
@@ -79,6 +80,7 @@ contains
         nbath = fdf_get("Nbath",5)
         nsite = norb + nbath
 
+        hfield   = fdf_get("hfield",   0.0D0)
         U   = fdf_get("U",   1.0D0)
         Jex = fdf_get("J",   0.3D0) 
         Up  = fdf_get("Up", -1.0d0)
