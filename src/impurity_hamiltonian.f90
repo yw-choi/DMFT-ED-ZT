@@ -377,6 +377,8 @@ contains
         enddo
         D_cl = 0.25d0*G_cl
 
+        call init_random( em, ek, vmk )
+
         ! find new em, ek, vmk 
         call fit_h_imp_params( em, ek, vmk, D_cl, G_cl, G_loc )
     end subroutine init_fit
